@@ -19,10 +19,12 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.snakeyaml.engine.v2.api.LoadSettings;
+import org.snakeyaml.engine.v2.tokens.AliasToken;
 import org.snakeyaml.engine.v2.tokens.AnchorToken;
 import org.snakeyaml.engine.v2.tokens.ScalarToken;
 import org.snakeyaml.engine.v2.tokens.Token;
@@ -83,6 +85,50 @@ class ScannerTest {
     assertEquals("an:chor", anchorToken.getValue().getValue());
   }
 
+  @Test
+  @DisplayName("Anchor names may contain path characters")
+  void testAnchorSpecialCharacters() {
+    for (String anchor : List.of(".foo", "/foo")) {
+      Token token = scanTo("key: &" + anchor + " value", 5);
+      assertEquals(ID.Anchor, token.getTokenId());
+      AnchorToken anchorToken = (AnchorToken) token;
+      assertEquals(anchor, anchorToken.getValue().getValue());
+    }
+  }
+
+  @Test
+  @DisplayName("Alias names may contain path characters")
+  void testAliasPathCharacters() {
+    List<String> aliases = List.of("foo.bar", "^", "^^");
+    for (String alias : aliases) {
+      Token token = scanTo("key: *" + alias, 5);
+      assertEquals(ID.Alias, token.getTokenId());
+      AliasToken aliasToken = (AliasToken) token;
+      assertEquals(alias, aliasToken.getValue().getValue());
+    }
+  }
+
+  @Test
+  @DisplayName("YAMLScript references are plain scalars")
+  void testYamlScriptReferences() {
+    List<String> references = List.of("*.a", "*^.a", "*^^.a", "*/a.3", "*/0", "*.a * *.b");
+    for (String reference : references) {
+      Token token = scanTo("key: " + reference, 5);
+      assertEquals(ID.Scalar, token.getTokenId());
+      ScalarToken scalarToken = (ScalarToken) token;
+      assertEquals(reference, scalarToken.getValue());
+    }
+  }
+
+  @Test
+  @DisplayName("Tagged YAMLScript references are plain scalars")
+  void testTaggedYamlScriptReference() {
+    Token token = scanTo("- ! */0", 4);
+    assertEquals(ID.Scalar, token.getTokenId());
+    ScalarToken scalarToken = (ScalarToken) token;
+    assertEquals("*/0", scalarToken.getValue());
+  }
+
   private Token scanTo(String input, int skip) {
     LoadSettings settings = LoadSettings.builder().build();
     StreamReader reader = new StreamReader(settings, input);
@@ -99,4 +145,3 @@ class ScannerTest {
     return scanner.next();
   }
 }
-

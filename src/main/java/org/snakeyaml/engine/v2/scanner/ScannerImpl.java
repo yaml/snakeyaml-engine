@@ -385,8 +385,12 @@ public final class ScannerImpl implements Scanner {
         }
         break;
       case '*':
-        // Is it an alias?
-        fetchAlias();
+        // Is it a YAMLScript reference or an alias?
+        if (checkYamlScriptReference()) {
+          fetchPlain();
+        } else {
+          fetchAlias();
+        }
         return;
       case '&':
         // Is it an anchor?
@@ -1096,6 +1100,24 @@ public final class ScannerImpl implements Scanner {
   }
 
   /**
+   * Returns true if the next thing on the reader is a YAMLScript node reference.
+   */
+  private boolean checkYamlScriptReference() {
+    int c = reader.peek(1);
+    if (c == '.' || c == '/') {
+      return true;
+    }
+    if (c != '^') {
+      return false;
+    }
+    int offset = 2;
+    while (reader.peek(offset) == '^') {
+      offset++;
+    }
+    return reader.peek(offset) == '.';
+  }
+
+  /**
    * Returns true if the next thing on the reader is a plain token.
    */
   private boolean checkPlain() {
@@ -1478,8 +1500,8 @@ public final class ScannerImpl implements Scanner {
     // The future implementation may try to follow <a href=
     // "https://github.com/yaml/yaml-spec/blob/master/rfc/RFC-0003.md">RFC-0003</a>
     // and exclude also ':' (colon)
-    // Anchor may not contain ,[]{}/.*&
-    while (CharConstants.NULL_BL_T_LINEBR.hasNo(c, ",[]{}/.*&")) {
+    // Anchor names may not contain flow collection, alias, or anchor indicators.
+    while (CharConstants.NULL_BL_T_LINEBR.hasNo(c, ",[]{}*&")) {
       length++;
       c = reader.peek(length);
     }

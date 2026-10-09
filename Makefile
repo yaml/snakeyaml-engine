@@ -9,10 +9,13 @@ include $M/maven.mk
 include $M/perl.mk
 include $M/yamlscript.mk
 include $M/shell.mk
+include $M/clean.mk
 
 VERSION := 3.2.0
 MVN = $(MAVEN) --batch-mode --no-transfer-progress \
   -Dmaven.repo.local=$(MAVEN-REPOSITORY)
+
+MAKES-CLEAN := target
 
 default:: build
 
