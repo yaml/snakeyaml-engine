@@ -39,8 +39,6 @@ public class AnchorUnicodeTest {
     INVALID_ANCHOR.add('{');
     INVALID_ANCHOR.add('}');
     INVALID_ANCHOR.add(',');
-    INVALID_ANCHOR.add('*');
-    INVALID_ANCHOR.add('&');
   }
 
   @Test
@@ -105,8 +103,8 @@ public class AnchorUnicodeTest {
     assertEquals("Invalid character '{' in the anchor: {a", checkAnchor("{a"));
     assertEquals("Invalid character '}' in the anchor: }a", checkAnchor("}a"));
     assertEquals("Invalid character ',' in the anchor: a,b", checkAnchor("a,b"));
-    assertEquals("Invalid character '*' in the anchor: a*b", checkAnchor("a*b"));
-    assertEquals("Invalid character '&' in the anchor: a&b", checkAnchor("a&b"));
+    assertEquals("a*b", new Anchor("a*b").getValue());
+    assertEquals("a&b", new Anchor("a&b").getValue());
   }
 
   private String checkAnchor(String a) {

@@ -1103,18 +1103,12 @@ public final class ScannerImpl implements Scanner {
    * Returns true if the next thing on the reader is a YAMLScript node reference.
    */
   private boolean checkYamlScriptReference() {
-    int c = reader.peek(1);
-    if (c == '.' || c == '/') {
-      return true;
-    }
-    if (c != '^') {
+    if (!Boolean.TRUE.equals(
+        settings.getCustomProperty(org.snakeyaml.engine.v2.api.YamlScriptSetting.REFERENCES))) {
       return false;
     }
-    int offset = 2;
-    while (reader.peek(offset) == '^') {
-      offset++;
-    }
-    return reader.peek(offset) == '.';
+    int c = reader.peek(1);
+    return "./*^:+-".indexOf(c) >= 0;
   }
 
   /**
@@ -1501,7 +1495,9 @@ public final class ScannerImpl implements Scanner {
     // "https://github.com/yaml/yaml-spec/blob/master/rfc/RFC-0003.md">RFC-0003</a>
     // and exclude also ':' (colon)
     // Anchor names may not contain flow collection, alias, or anchor indicators.
-    while (CharConstants.NULL_BL_T_LINEBR.hasNo(c, ",[]{}*&")) {
+    boolean yamlScript = Boolean.TRUE.equals(
+        settings.getCustomProperty(org.snakeyaml.engine.v2.api.YamlScriptSetting.REFERENCES));
+    while (CharConstants.NULL_BL_T_LINEBR.hasNo(c, isAnchor || yamlScript ? ",[]{}" : ",[]{}*&")) {
       length++;
       c = reader.peek(length);
     }
@@ -1511,6 +1507,15 @@ public final class ScannerImpl implements Scanner {
           "unexpected character found " + s + "(" + c + ")", reader.getMark());
     }
     String value = reader.prefixForward(length);
+    if (!isAnchor
+        && Boolean.TRUE.equals(settings
+            .getCustomProperty(org.snakeyaml.engine.v2.api.YamlScriptSetting.EXPRESSION_ALIASES))
+        && !value.matches("[A-Za-z0-9_][A-Za-z0-9_-]*"
+            + "(?:\\.(?:[A-Za-z0-9_][A-Za-z0-9_-]*|[+-][0-9]+|"
+            + "\\$|#|\\?\\??|!{1,2}|--|\\+\\+|@|>>>|>))*" + "(?::[A-Za-z_][A-Za-z0-9_-]*\\??)*")) {
+      throw new ScannerException(null, Optional.empty(), "Invalid reference syntax: *" + value,
+          Optional.empty());
+    }
     c = reader.peek();
     if (CharConstants.NULL_BL_T_LINEBR.hasNo(c, "?:,]}%@`")) {
       final String s = String.valueOf(Character.toChars(c));

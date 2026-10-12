@@ -16,6 +16,7 @@ package org.snakeyaml.engine.v2.scanner;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -24,6 +25,8 @@ import java.util.NoSuchElementException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.snakeyaml.engine.v2.api.LoadSettings;
+import org.snakeyaml.engine.v2.api.YamlScriptSetting;
+import org.snakeyaml.engine.v2.exceptions.ScannerException;
 import org.snakeyaml.engine.v2.tokens.AliasToken;
 import org.snakeyaml.engine.v2.tokens.AnchorToken;
 import org.snakeyaml.engine.v2.tokens.ScalarToken;
@@ -86,37 +89,54 @@ class ScannerTest {
   }
 
   @Test
-  @DisplayName("Anchor names may contain path characters")
+  @DisplayName("Anchor names may contain YAML anchor characters")
   void testAnchorSpecialCharacters() {
-    for (String anchor : List.of(".foo", "/foo")) {
+    List<String> anchors = List.of("~", "`", "!", "@", "#", "$", "^", "&", "*", "(", ")", "-", "_",
+        "+", "=", "|", "\\", ":", ";", "'", "\"", "<", ">", ".", "?", "/");
+    for (String anchor : anchors) {
       Token token = scanTo("key: &" + anchor + " value", 5);
-      assertEquals(ID.Anchor, token.getTokenId());
+      assertEquals(ID.Anchor, token.getTokenId(), anchor);
       AnchorToken anchorToken = (AnchorToken) token;
-      assertEquals(anchor, anchorToken.getValue().getValue());
+      assertEquals(anchor, anchorToken.getValue().getValue(), anchor);
     }
   }
 
   @Test
-  @DisplayName("Alias names may contain path characters")
-  void testAliasPathCharacters() {
-    List<String> aliases = List.of("foo.bar", "^", "^^");
+  @DisplayName("Expression aliases use the restricted reference grammar")
+  void testExpressionAliasCharacters() {
+    List<String> aliases = List.of("foo", "123", "_foo", "foo-bar", "foo_bar", "foo.bar", "foo.-1",
+        "foo.+1", "foo.$", "foo.#", "foo.?", "foo.!", "foo.??", "foo.!!", "foo.--", "foo.++",
+        "foo.@", "foo.>", "foo.>>>", "foo:bar", "foo:bar?");
     for (String alias : aliases) {
       Token token = scanTo("key: *" + alias, 5);
-      assertEquals(ID.Alias, token.getTokenId());
+      assertEquals(ID.Alias, token.getTokenId(), alias);
       AliasToken aliasToken = (AliasToken) token;
-      assertEquals(alias, aliasToken.getValue().getValue());
+      assertEquals(alias, aliasToken.getValue().getValue(), alias);
+    }
+  }
+
+  @Test
+  @DisplayName("Expression aliases reject reserved characters")
+  void testExpressionAliasReservedCharacters() {
+    List<String> aliases = List.of("foo()", "foo'bar", "foo\"bar", "foo`bar", "foo#bar", "foo~bar",
+        "foo=bar", "foo|bar", "foo;bar", "foo<bar", "foo/bar", "foo:bar!");
+    for (String alias : aliases) {
+      assertThrows(ScannerException.class, () -> scanAll("key: *" + alias), alias);
     }
   }
 
   @Test
   @DisplayName("YAMLScript references are plain scalars")
   void testYamlScriptReferences() {
-    List<String> references = List.of("*.a", "*^.a", "*^^.a", "*/a.3", "*/0", "*.a * *.b");
+    List<String> references = List.of("*.", "*.a", "*:count", "*:empty?", "*-", "*+", "*-3", "*+4",
+        "*^", "*^^", "*^5", "*^-3", "*^+4", "*^3-5", "*^5.root", "*/", "*/a.3", "*/0", "**", "**.$",
+        "**:count", "*.#", "*.?", "*.!", "*.??", "*.!!", "*.--", "*.++", "*.@", "*.>", "*.>>>",
+        "*.a * *.b");
     for (String reference : references) {
       Token token = scanTo("key: " + reference, 5);
-      assertEquals(ID.Scalar, token.getTokenId());
+      assertEquals(ID.Scalar, token.getTokenId(), reference);
       ScalarToken scalarToken = (ScalarToken) token;
-      assertEquals(reference, scalarToken.getValue());
+      assertEquals(reference, scalarToken.getValue(), reference);
     }
   }
 
@@ -130,7 +150,9 @@ class ScannerTest {
   }
 
   private Token scanTo(String input, int skip) {
-    LoadSettings settings = LoadSettings.builder().build();
+    LoadSettings settings =
+        LoadSettings.builder().setCustomProperty(YamlScriptSetting.REFERENCES, true)
+            .setCustomProperty(YamlScriptSetting.EXPRESSION_ALIASES, true).build();
     StreamReader reader = new StreamReader(settings, input);
     ScannerImpl scanner = new ScannerImpl(settings, reader);
     int i = 0;
@@ -143,5 +165,16 @@ class ScannerTest {
     }
     assertTrue(scanner.hasNext());
     return scanner.next();
+  }
+
+  private void scanAll(String input) {
+    LoadSettings settings =
+        LoadSettings.builder().setCustomProperty(YamlScriptSetting.REFERENCES, true)
+            .setCustomProperty(YamlScriptSetting.EXPRESSION_ALIASES, true).build();
+    StreamReader reader = new StreamReader(settings, input);
+    ScannerImpl scanner = new ScannerImpl(settings, reader);
+    while (scanner.hasNext()) {
+      scanner.next();
+    }
   }
 }

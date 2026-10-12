@@ -34,8 +34,6 @@ public class Anchor {
     INVALID_ANCHOR.add('{');
     INVALID_ANCHOR.add('}');
     INVALID_ANCHOR.add(',');
-    INVALID_ANCHOR.add('*');
-    INVALID_ANCHOR.add('&');
   }
 
   private final String value;

@@ -55,8 +55,8 @@ class AnchorTest {
     assertEquals("Invalid character ']' in the anchor: anchor]", checkChar(']').getMessage());
     assertEquals("Invalid character '{' in the anchor: anchor{", checkChar('{').getMessage());
     assertEquals("Invalid character '}' in the anchor: anchor}", checkChar('}').getMessage());
-    assertEquals("Invalid character '*' in the anchor: anchor*", checkChar('*').getMessage());
-    assertEquals("Invalid character '&' in the anchor: anchor&", checkChar('&').getMessage());
+    assertEquals("anchor*", new Anchor("anchor*").getValue());
+    assertEquals("anchor&", new Anchor("anchor&").getValue());
   }
 
   private EmitterException checkChar(Character ch) {
