@@ -24,22 +24,40 @@ make bundle
 ```
 
 `bundle` signs the main JAR, sources, Javadoc, and POM using Maven's release
-profile and your configured GPG key.
+profile and the GPG key specified in `~/.yamlstar-secrets.yaml`.
 It creates `target/central-publishing/central-bundle.zip` with uploading
 disabled, using the Central plugin's `skipUpload` option.
 
 ## Release
 
 Verify ownership of `org.yamlstar` in the Central Portal first.
-Configure Maven credentials using server ID `central` and configure GPG
-signing outside the repository.
-Keep credentials out of command arguments and version control.
+The release command reads `java.token` (falling back to `central.token`) and
+`gpg.key-id` from `~/.yamlstar-secrets.yaml`, using the same credential format
+as YAMLStar.
+It also reads the optional `gpg.passphrase`.
+The signing key must be available to GPG.
+No Maven settings file or Maven-home override is needed.
 
 Run the release yourself:
 
 ```bash
-make release CENTRAL_NAMESPACE_VERIFIED=org.yamlstar
+make release v=3.2.0
 ```
+
+The requested version must match `pom.xml`.
+Use `3.2.1`, `3.2.2`, and later patch versions for additional fork releases
+based on upstream `3.2`.
+Update the POM version, SCM tag, and Makefile version before each release,
+and record the exact upstream base in the release notes.
+When adopting upstream `3.3`, start the fork's new line at `3.3.0`.
+The parser plugin pins its Engine dependency, so adopting a newer fork
+version also requires a plugin release with rebuilt native libraries.
+
+`CENTRAL_TOKEN`, `GPG_KEY_ID`, and `GPG_PASSPHRASE` environment variables can
+override file values.
+`YS_SECRETS_FILE` selects an alternative secrets file.
+The helper passes credentials through environment variables and temporary
+Maven settings containing only variable references.
 
 Automatic publication is disabled.
 Review and publish the deployment in the Central Portal, then verify all

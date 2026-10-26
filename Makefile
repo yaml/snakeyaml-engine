@@ -6,6 +6,8 @@ $(shell test -d $M || { \
 })
 include $M/init.mk
 include $M/maven.mk
+include $M/perl.mk
+include $M/yamlscript.mk
 include $M/shell.mk
 
 VERSION := 3.2.0
@@ -23,11 +25,16 @@ test: $(MAVEN)
 install: $(MAVEN)
 	$(MVN) install -DskipTests
 
-bundle: $(MAVEN)
-	$(MVN) deploy -Prelease -DskipTests -Dcentral.skipUpload=true
+bundle: $(MAVEN) $(PERL) $(YS)
+	YS=$(YS) $(PERL) util/maven-release bundle \
+	  $(MAVEN) $(MAVEN-REPOSITORY) -DskipTests
 
-release: test
-	@test "$(CENTRAL_NAMESPACE_VERIFIED)" = org.yamlstar || { \
-	  echo 'Verify org.yamlstar Central ownership, then set' >&2; \
-	  echo 'CENTRAL_NAMESPACE_VERIFIED=org.yamlstar' >&2; exit 1; }
-	$(MVN) deploy -Prelease -DskipTests
+release-check: $(PERL)
+	$(PERL) util/maven-release check-version '$(v)'
+
+release: release-check test $(MAVEN) $(PERL) $(YS)
+	YS=$(YS) $(PERL) util/maven-release release \
+	  $(MAVEN) $(MAVEN-REPOSITORY) -DskipTests
+
+test-release: $(PERL) $(YS)
+	YS=$(YS) $(PERL) test/maven-release.t
