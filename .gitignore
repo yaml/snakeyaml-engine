@@ -84,3 +84,5 @@ nb-configuration.xml
 ## Claude Code
 ##############################
 CLAUDE.md
+/.cache/
+!/Fork.md
