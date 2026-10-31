@@ -106,7 +106,8 @@ class ScannerTest {
   void testExpressionAliasCharacters() {
     List<String> aliases = List.of("foo", "123", "_foo", "foo-bar", "foo_bar", "foo.bar", "foo.-1",
         "foo.+1", "foo.$", "foo.#", "foo.?", "foo.!", "foo.??", "foo.!!", "foo.--", "foo.++",
-        "foo.@", "foo.>", "foo.>>>", "foo:bar", "foo:bar?");
+        "foo.@", "foo.>", "foo.>>>", "foo:bar", "foo:bar?", "foo:keys.#", "foo.b:vector.#.++",
+        "foo:vector.0.++:vector.#", "foo:reverse.$.name");
     for (String alias : aliases) {
       Token token = scanTo("key: *" + alias, 5);
       assertEquals(ID.Alias, token.getTokenId(), alias);
@@ -119,7 +120,8 @@ class ScannerTest {
   @DisplayName("Expression aliases reject reserved characters")
   void testExpressionAliasReservedCharacters() {
     List<String> aliases = List.of("foo()", "foo'bar", "foo\"bar", "foo`bar", "foo#bar", "foo~bar",
-        "foo=bar", "foo|bar", "foo;bar", "foo<bar", "foo/bar", "foo:bar!");
+        "foo=bar", "foo|bar", "foo;bar", "foo<bar", "foo/bar", "foo:bar!", "foo:bar.#:",
+        "foo:bar..key", "foo:bar.()", "foo:bar.~key");
     for (String alias : aliases) {
       assertThrows(ScannerException.class, () -> scanAll("key: *" + alias), alias);
     }
@@ -131,7 +133,8 @@ class ScannerTest {
     List<String> references = List.of("*.", "*.a", "*:count", "*:empty?", "*-", "*+", "*-3", "*+4",
         "*^", "*^^", "*^5", "*^-3", "*^+4", "*^3-5", "*^5.root", "*/", "*/a.3", "*/0", "**", "**.$",
         "**:count", "*.#", "*.?", "*.!", "*.??", "*.!!", "*.--", "*.++", "*.@", "*.>", "*.>>>",
-        "*.a * *.b");
+        "*.a * *.b", "*~", "*~.", "*~foo.bar", "*~^.key", "*~/key", "*~-", "*~+", "*~:count",
+        "*~.#", "*~.a * *.b", "*~:keys.#", "*~.b:vector.#.++", "**:last.value:vector.#");
     for (String reference : references) {
       Token token = scanTo("key: " + reference, 5);
       assertEquals(ID.Scalar, token.getTokenId(), reference);
@@ -147,6 +150,24 @@ class ScannerTest {
     assertEquals(ID.Scalar, token.getTokenId());
     ScalarToken scalarToken = (ScalarToken) token;
     assertEquals("*/0", scalarToken.getValue());
+  }
+
+  @Test
+  @DisplayName("Default YAML keeps tilde-prefixed aliases")
+  void testDefaultTildeAliases() {
+    LoadSettings settings = LoadSettings.builder().build();
+    ScannerImpl scanner =
+        new ScannerImpl(settings, new StreamReader(settings, "- &~ 6\n- *~\n- &~foo 7\n- *~foo\n"));
+    int aliases = 0;
+    while (scanner.hasNext()) {
+      Token token = scanner.next();
+      if (token instanceof AliasToken) {
+        AliasToken alias = (AliasToken) token;
+        assertEquals(aliases == 0 ? "~" : "~foo", alias.getValue().getValue());
+        aliases++;
+      }
+    }
+    assertEquals(2, aliases);
   }
 
   private Token scanTo(String input, int skip) {

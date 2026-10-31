@@ -1108,7 +1108,7 @@ public final class ScannerImpl implements Scanner {
       return false;
     }
     int c = reader.peek(1);
-    return "./*^:+-".indexOf(c) >= 0;
+    return "./*^:+-~".indexOf(c) >= 0;
   }
 
   /**
@@ -1510,9 +1510,9 @@ public final class ScannerImpl implements Scanner {
     if (!isAnchor
         && Boolean.TRUE.equals(settings
             .getCustomProperty(org.snakeyaml.engine.v2.api.YamlScriptSetting.EXPRESSION_ALIASES))
-        && !value.matches("[A-Za-z0-9_][A-Za-z0-9_-]*"
-            + "(?:\\.(?:[A-Za-z0-9_][A-Za-z0-9_-]*|[+-][0-9]+|"
-            + "\\$|#|\\?\\??|!{1,2}|--|\\+\\+|@|>>>|>))*" + "(?::[A-Za-z_][A-Za-z0-9_-]*\\??)*")) {
+        && !value.matches(
+            "[A-Za-z0-9_][A-Za-z0-9_-]*" + "(?:\\.(?:[A-Za-z0-9_][A-Za-z0-9_-]*|[+-][0-9]+|"
+                + "\\$|#|\\?\\??|!{1,2}|--|\\+\\+|@|>>>|>)|:[A-Za-z_][A-Za-z0-9_-]*\\??)*")) {
       throw new ScannerException(null, Optional.empty(), "Invalid reference syntax: *" + value,
           Optional.empty());
     }
