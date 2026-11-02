@@ -5,26 +5,171 @@ use File::Path qw(make_path);
 use File::Spec;
 use File::Temp qw(tempfile);
 use MIME::Base64 qw(decode_base64 encode_base64);
+use POSIX qw(strftime);
 
 sub fail { die "$_[0]\n" }
 
-my $mode = shift @ARGV // '';
-if ($mode eq 'check-version') {
-    my $version = shift @ARGV // '';
-    $version =~ /^\d+\.\d+\.\d+$/
-        or fail('Use make release v=VERSION');
-    open my $pom, '<', 'pom.xml' or fail("pom.xml: $!");
+sub read_file {
+    my ($path) = @_;
+    open my $input, '<', $path or fail("$path: $!");
     local $/;
-    my $source = <$pom>;
-    close $pom or fail("pom.xml: $!");
-    my ($current) = $source =~ m{<version>\s*([^<]+)\s*</version>};
-    defined $current && $current eq $version
+    my $source = <$input>;
+    close $input or fail("$path: $!");
+    return $source;
+}
+
+sub write_file {
+    my ($path, $source) = @_;
+    open my $output, '>', $path or fail("$path: $!");
+    print {$output} $source or fail("$path: $!");
+    close $output or fail("$path: $!");
+}
+
+sub command {
+    my (@command) = @_;
+    print '+ ', join(' ', @command), "\n";
+    system {$command[0]} @command;
+    my $status = $?;
+    $status == -1 and fail("Cannot start $command[0]");
+    exit($status & 127 ? 128 + ($status & 127) : $status >> 8)
+        if $status;
+}
+
+sub git_output {
+    open my $output, '-|', 'git', @_
+        or fail('Cannot start Git');
+    local $/;
+    my $value = <$output> // '';
+    close $output or fail('Git check failed');
+    $value =~ s/\n\z//;
+    return $value;
+}
+
+sub current_version {
+    my ($current) = read_file('pom.xml')
+        =~ m{<version>\s*([^<]+)\s*</version>};
+    defined $current or fail('Cannot find the project version in pom.xml');
+    return $current;
+}
+
+sub valid_version {
+    my ($version) = @_;
+    $version =~ /\A(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\z/
+        or fail('Use make release v=VERSION');
+}
+
+sub clean_tree {
+    length git_output('status', '--porcelain')
+        and fail('Working tree is not clean; commit or stash changes first');
+}
+
+sub check_release {
+    my ($version) = @_;
+    valid_version($version);
+    my $current = current_version();
+    my @old = split /\./, $current;
+    my @new = split /\./, $version;
+    @old == 3 && $new[0] == $old[0] && $new[1] == $old[1]
+        && $new[2] > $old[2]
+        or fail("Release version must be a newer patch of $current");
+    my $branch = git_output('branch', '--show-current');
+    length $branch or fail('Release requires a named branch');
+    $branch eq 'master' || ($ENV{ENGINE_RELEASE_ALLOW_BRANCH} // '') eq '1'
+        or fail("Release requires branch master; use a=1 for $branch");
+    clean_tree();
+    length git_output('tag', '--list', $version)
+        and fail("Tag $version already exists");
+    return $current;
+}
+
+sub prepare_release {
+    my ($current, $version) = @_;
+    my %sources = map { $_ => read_file($_) }
+        qw(pom.xml Makefile Fork.md src/changes/changes.xml);
+    $sources{'pom.xml'} =~ s{(<version>)\Q$current\E(</version>)}{$1$version$2}
+        or fail('Cannot update the POM version');
+    $sources{'pom.xml'} =~ s{(<scm>.*?<tag>)[^<]*(</tag>.*?</scm>)}
+        {$1$version$2}s or fail('Cannot update the POM SCM tag');
+    $sources{'Makefile'} =~ s{^VERSION := \Q$current\E$}{VERSION := $version}m
+        or fail('Makefile VERSION does not match pom.xml');
+    $sources{'Fork.md'} =~ s{\Q$current\E}{$version}g;
+    my $date = strftime('%Y-%m-%d', gmtime);
+    my $changes = \$sources{'src/changes/changes.xml'};
+    if ($$changes =~ /<release version="\Q$version\E"/) {
+        $$changes =~ s{(<release version="\Q$version\E" date=")[^"]*}
+            {$1$date} or fail('Cannot update the release date');
+    } else {
+        my $release = <<XML;
+        <release version="$version" date="$date" description="YAMLStar fork">
+            <action dev="ingy" type="update">
+                Release the shared SnakeYAML Engine fork
+            </action>
+        </release>
+XML
+        $$changes =~ s{(<body>\n)}{$1$release}
+            or fail('Cannot add the release changelog');
+    }
+    write_file($_, $sources{$_}) for sort keys %sources;
+    return \%sources;
+}
+
+sub check_prepared_tree {
+    my ($sources) = @_;
+    for my $path (sort keys %$sources) {
+        read_file($path) eq $sources->{$path}
+            or fail("Tests modified release metadata: $path");
+    }
+    my @changed = split /\0/, git_output('diff', '--name-only', '-z', 'HEAD');
+    my @untracked = split /\0/,
+        git_output('ls-files', '--others', '--exclude-standard', '-z');
+    (grep { !exists $sources->{$_} } @changed) || @untracked
+        and fail('Tests modified files outside the release metadata');
+}
+
+sub check_upload {
+    my ($version) = @_;
+    valid_version($version);
+    current_version() eq $version
         or fail("Requested version $version does not match pom.xml");
+    clean_tree();
+    length git_output('tag', '--list', $version)
+        or fail("Release tag $version is missing");
+    git_output('rev-parse', "$version\^{commit}")
+        eq git_output('rev-parse', 'HEAD')
+        or fail("Release tag $version does not point to HEAD");
+}
+
+my $mode = shift @ARGV // '';
+if ($mode eq 'check-version' || $mode eq 'check-upload') {
+    my $version = shift @ARGV // '';
+    valid_version($version);
+    current_version() eq $version
+        or fail("Requested version $version does not match pom.xml");
+    check_upload($version) if $mode eq 'check-upload';
     exit 0;
 }
 
-$mode =~ /^(?:bundle|release)$/
-    or fail('Usage: maven-release bundle|release MAVEN REPOSITORY [FLAGS]');
+my ($version, $current);
+if ($mode eq 'upload') {
+    $version = shift @ARGV // '';
+    check_upload($version);
+}
+if ($mode eq 'workflow' || $mode eq 'check-release') {
+    $version = shift @ARGV // '';
+    $current = check_release($version);
+    exit 0 if $mode eq 'check-release';
+    if (($ENV{ENGINE_RELEASE_DRYRUN} // '') eq '1') {
+        print "Would bump $current to $version in pom.xml, Makefile, Fork.md, ",
+            "and src/changes/changes.xml\n";
+        print "Would run Maven tests, commit release metadata, ",
+            "and create annotated tag $version\n";
+        print "Would sign and upload to Central for manual approval\n";
+        exit 0;
+    }
+}
+
+$mode =~ /^(?:bundle|release|workflow|upload)$/
+    or fail('Usage: maven-release workflow VERSION MAVEN REPOSITORY [FLAGS]');
 my ($maven, $repository, @flags) = @ARGV;
 defined $maven && defined $repository or fail('Missing Maven arguments');
 my $secrets = $ENV{YS_SECRETS_FILE}
@@ -80,8 +225,27 @@ if (length $token) {
     <password>${env.YAMLSTAR_CENTRAL_PASSWORD}</password>
   </server></servers>
 XML
-} elsif ($mode eq 'release') {
+} elsif ($mode ne 'bundle') {
     fail("Set java.token or central.token in $secrets or CENTRAL_TOKEN");
+}
+
+if ($mode eq 'workflow') {
+    $| = 1;
+    print "Release $current -> $version: bump, test, commit, tag, ",
+        "and upload for Central approval? [y/N] ";
+    my $answer = <STDIN> // '';
+    $answer =~ /^y(?:es)?\s*$/i or fail('Release cancelled');
+    my $prepared = prepare_release($current, $version);
+    command($maven, '--batch-mode', '--no-transfer-progress',
+        "-Dmaven.repo.local=$repository", 'test');
+    check_prepared_tree($prepared);
+    command('git', 'add', '--', 'pom.xml', 'Makefile', 'Fork.md',
+        'src/changes/changes.xml');
+    command('git', 'commit', '-m', "release: Prepare Engine $version", '-m',
+        "Update the shared Engine version, SCM tag, and release metadata.\n" .
+        "Validate the Engine before signing and uploading its artifacts.");
+    command('git', 'tag', '-a', $version, '-m', "SnakeYAML Engine $version");
+    clean_tree();
 }
 
 make_path('.cache');

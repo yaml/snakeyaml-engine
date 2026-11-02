@@ -38,18 +38,53 @@ It also reads the optional `gpg.passphrase`.
 The signing key must be available to GPG.
 No Maven settings file or Maven-home override is needed.
 
-Run the release yourself:
+Run the release yourself from a clean `master` checkout:
 
 ```bash
-make release v=3.2.0
+make release v=3.2.1
 ```
 
-The requested version must match `pom.xml`.
+Use `a=1` to release from another named branch:
+
+```bash
+make release v=3.2.1 a=1
+```
+
+Add `d=1` to preview preparation without credentials, Maven execution, source
+changes, commits, tags, or uploading:
+
+```bash
+make release v=3.2.1 a=1 d=1
+```
+
+The requested version must be a newer patch version than `pom.xml`.
+The workflow rejects dirty checkouts, detached HEAD, and existing release tags.
+After confirmation, it updates the project version and SCM tag in `pom.xml`,
+`VERSION` in the Makefile, this document, and `src/changes/changes.xml`.
+An existing changelog entry retains its actions and receives the release date;
+otherwise the workflow adds a release entry.
+It runs Maven tests against the prepared version, creates a release commit and
+an annotated version tag, then signs and uploads the artifacts.
+Git remotes are not modified.
+
+If tests fail, the prepared files remain uncommitted for inspection.
+No release commit, tag, or upload is made.
+If signing or uploading fails after testing, the release commit and tag remain.
+Retry only the upload with:
+
+```bash
+make release-upload v=3.2.1
+```
+
+The retry requires a clean checkout with the requested version tag at HEAD.
+It does not bump versions or create another commit or tag.
+Do not retry uploading a version already published on Central.
+
 Use `3.2.1`, `3.2.2`, and later patch versions for additional fork releases
 based on upstream `3.2`.
-Update the POM version, SCM tag, and Makefile version before each release,
-and record the exact upstream base in the release notes.
+Record the exact upstream base in the release notes.
 When adopting upstream `3.3`, start the fork's new line at `3.3.0`.
+That change requires explicitly preparing the new upstream baseline first.
 The parser plugin pins its Engine dependency, so adopting a newer fork
 version also requires a plugin release with rebuilt native libraries.
 

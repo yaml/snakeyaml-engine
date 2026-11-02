@@ -33,11 +33,30 @@ bundle: $(MAVEN) $(PERL) $(YS)
 	  $(MAVEN) $(MAVEN-REPOSITORY) -DskipTests
 
 release-check: $(PERL)
-	$(PERL) util/maven-release check-version '$(v)'
+	ENGINE_RELEASE_ALLOW_BRANCH='$(a)' \
+	  $(PERL) util/maven-release check-release '$(v)'
 
-release: release-check test $(MAVEN) $(PERL) $(YS)
-	YS=$(YS) $(PERL) util/maven-release release \
+release: release-check
+ifeq ($(d),1)
+	ENGINE_RELEASE_ALLOW_BRANCH='$(a)' ENGINE_RELEASE_DRYRUN=1 \
+	  $(PERL) util/maven-release workflow '$(v)'
+else
+	+$(MAKE) release-run v='$(v)' a='$(a)'
+endif
+
+release-run: $(MAVEN) $(PERL) $(YS)
+	ENGINE_RELEASE_ALLOW_BRANCH='$(a)' YS=$(YS) \
+	  $(PERL) util/maven-release workflow '$(v)' \
+	  $(MAVEN) $(MAVEN-REPOSITORY) -DskipTests
+
+release-upload: $(PERL)
+	$(PERL) util/maven-release check-upload '$(v)'
+	+$(MAKE) release-upload-run v='$(v)'
+
+release-upload-run: $(MAVEN) $(PERL) $(YS)
+	YS=$(YS) $(PERL) util/maven-release upload '$(v)' \
 	  $(MAVEN) $(MAVEN-REPOSITORY) -DskipTests
 
 test-release: $(PERL) $(YS)
 	YS=$(YS) $(PERL) test/maven-release.t
+	$(PERL) test/release-workflow.t
