@@ -5,7 +5,7 @@ This fork starts at canonical upstream tag `snakeyaml-engine-3.2`:
 - Repository: https://codeberg.org/snakeyaml/snakeyaml-engine
 - Annotated tag object: `3bfec70d567e632d282866107840cb85c98fc063`
 - Source commit: `8a670d3f78ebfd3c60fe6ea16f5ea94f0b2c611b`
-- Fork coordinate: `org.yamlstar:snakeyaml-engine:3.2.0`
+- Fork coordinate: `org.yamlstar:snakeyaml-engine:3.2.1`
 
 The Java implementation, package names, Apache 2.0 license, and upstream
 attribution are retained.
@@ -96,5 +96,5 @@ Maven settings containing only variable references.
 
 Automatic publication is disabled.
 Review and publish the deployment in the Central Portal, then verify all
-four artifacts and signatures under `org/yamlstar/snakeyaml-engine/3.2.0`.
+four artifacts and signatures under `org/yamlstar/snakeyaml-engine/3.2.1`.
 Release the parser plugin only after the Engine artifacts are downloadable.

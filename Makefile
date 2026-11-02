@@ -11,7 +11,7 @@ include $M/yamlscript.mk
 include $M/shell.mk
 include $M/clean.mk
 
-VERSION := 3.2.0
+VERSION := 3.2.1
 MVN = $(MAVEN) --batch-mode --no-transfer-progress \
   -Dmaven.repo.local=$(MAVEN-REPOSITORY)
 
